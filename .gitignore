@@ -1,3 +1,5 @@
-venv/
 setup.py
-.env
+pyproject.toml
+dist/
+semroute.egg-info/
+__pycache__

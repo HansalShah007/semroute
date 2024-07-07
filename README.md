@@ -9,6 +9,7 @@ Install the library using the command:
 ```bash
 pip install semroute
 ```
+[PyPI Package](https://pypi.org/project/semroute/)
 
 To use the semantic router, you need to create a **Router** and add semantic routes that will define the available routes for a given query.
 

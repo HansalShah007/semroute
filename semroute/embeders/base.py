@@ -1,6 +1,6 @@
 import numpy as np
 from typing import List, Dict
-from utils.similarity import cosine_similarity
+from semroute.utils.similarity import cosine_similarity
 
 class BaseEmbeder:
     dynamic_threshold = 1.0

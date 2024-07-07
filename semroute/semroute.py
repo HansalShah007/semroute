@@ -1,9 +1,9 @@
 from typing import List, Dict
-from embeders.openai import OpenAIEmbeder
-from embeders.mistral import MistralAIEmbeder
-from utils.centroid import get_centroid
-from utils.similar_utterances import get_similar_utterances
-from utils.similarity import cosine_similarity
+from semroute.embeders.openai import OpenAIEmbeder
+from semroute.embeders.mistral import MistralAIEmbeder
+from semroute.utils.centroid import get_centroid
+from semroute.utils.similar_utterances import get_similar_utterances
+from semroute.utils.similarity import cosine_similarity
 
 embedding_models = {
     "OpenAI": ['text-embedding-3-small', 'text-embedding-3-large', 'text-embedding-ada-002'],

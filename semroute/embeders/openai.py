@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from embeders.base import BaseEmbeder
+from semroute.embeders.base import BaseEmbeder
 from typing import List
 from openai import OpenAI
 

@@ -3,3 +3,4 @@ pyproject.toml
 dist/
 semroute.egg-info/
 __pycache__
+venv/

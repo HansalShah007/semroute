@@ -119,3 +119,29 @@ router.route("How much does the health insurance costs?")
 ```shell
 [OUT]: health
 ```
+
+```python
+router.route("Let's go to Italy!")
+```
+
+```shell
+[OUT]: travel
+```
+
+### To save/ load your router configuration
+
+The tools allows you to save your configured router into a pickle file using the `save_router` method.
+
+```python
+router.save_router("path/to/filename.pkl")
+```
+
+You can also load your saved configuration and use it to configure a router.
+
+```python
+from semroute import Router
+
+router = Router()
+router.load_router("path/to/filename.pkl")
+router.route("Query to route")
+```

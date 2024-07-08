@@ -48,8 +48,7 @@ class RouterSchema(BaseModel):
         embeder_host = self.embeder_host
         embeder_model_name = self.embeder_model_name
         if embeder_model_name not in embedding_models[embeder_host]:
-            raise ValueError(f"Embeder model is not supported by the embeder host, choose from {
-                             embedding_models[embeder_host]}")
+            raise ValueError(f"Embeder model is not supported by the embeder host, choose from {embedding_models[embeder_host]}")
         return self
 
     @model_validator(mode='after')

@@ -102,8 +102,7 @@ class Router:
         self.embeder_host = embeder_host
 
         if embeder_model not in embedding_models[embeder_host]:
-            raise ValueError(f"Incorrect value for embeder model, choose from {
-                             embedding_models[embeder_host]}")
+            raise ValueError(f"Incorrect value for embeder model, choose from {embedding_models[embeder_host]}")
         self.embeder_model_name = embeder_model
         self.embeder_model = host_embeder_class_mapping[self.embeder_host](
             embeder_model)

@@ -1,6 +1,7 @@
 import pickle
 import numpy as np
 import sys
+import logging
 from typing import List, Dict, Optional, Literal
 from pydantic import BaseModel, ValidationError, model_validator
 from semroute.embeders.openai import OpenAIEmbeder
@@ -8,6 +9,9 @@ from semroute.embeders.mistral import MistralAIEmbeder
 from semroute.utils.centroid import get_centroid
 from semroute.utils.similar_utterances import get_similar_utterances
 from semroute.utils.similarity import cosine_similarity
+
+logging.basicConfig(level=logging.ERROR,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
 
 embedding_models = {
     "OpenAI": ['text-embedding-3-small', 'text-embedding-3-large', 'text-embedding-ada-002'],
@@ -175,38 +179,43 @@ class Router:
         - str: The name of the best matching route or `None` if no match is found.
         """
 
-        query_embedding = self.embeder_model.embed_utterances([query])[0]
+        if len(self.routes):
+            query_embedding = self.embeder_model.embed_utterances([query])[0]
 
-        if self.thresholding_type == 'static':
-            threshold = self.embeder_model.get_static_threshold_score()
-        elif self.thresholding_type == 'dynamic':
-            threshold = self.embeder_model.dynamic_threshold
-        route_scores = {}
-        if self.scoring_method == 'individual_averaging':
+            if self.thresholding_type == 'static':
+                threshold = self.embeder_model.get_static_threshold_score()
+            elif self.thresholding_type == 'dynamic':
+                threshold = self.embeder_model.dynamic_threshold
+            route_scores = {}
+            if self.scoring_method == 'individual_averaging':
 
-            for route in self.routes:
-                avg_score = 0
-                for i, utter_embed in enumerate(route['utterance_embeddings']):
-                    avg_score += cosine_similarity(query_embedding,
-                                                   utter_embed)
-                avg_score /= len(route['utterance_embeddings'])
-                if avg_score >= threshold:
-                    route_scores[route['name']] = avg_score
+                for route in self.routes:
+                    avg_score = 0
+                    for i, utter_embed in enumerate(route['utterance_embeddings']):
+                        avg_score += cosine_similarity(query_embedding,
+                                                    utter_embed)
+                    avg_score /= len(route['utterance_embeddings'])
+                    if avg_score >= threshold:
+                        route_scores[route['name']] = avg_score
 
-        elif self.scoring_method == 'centroid':
+            elif self.scoring_method == 'centroid':
 
-            for route in self.routes:
-                score = cosine_similarity(query_embedding, route['centroid'])
-                if score >= threshold:
-                    route_scores[route['name']] = score
+                for route in self.routes:
+                    score = cosine_similarity(query_embedding, route['centroid'])
+                    if score >= threshold:
+                        route_scores[route['name']] = score
 
-        if route_scores:
-            sort_routes = list(route_scores.items())
-            sort_routes.sort(key=lambda x: x[1], reverse=True)
-            return sort_routes[0][0]
+            if route_scores:
+                sort_routes = list(route_scores.items())
+                sort_routes.sort(key=lambda x: x[1], reverse=True)
+                return sort_routes[0][0]
+            else:
+                return None
+
         else:
-            return None
-
+            logging.error("Routes are missing! Add routes to the router for routing a query")
+            sys.exit(1)
+            
     def save_router(
         self,
         filepath: str
@@ -265,5 +274,5 @@ class Router:
             self.routes = preconfig_routes['routes']
 
         except ValueError or ValidationError as e:
-            print(e)
+            logging.error(e)
             sys.exit(1)

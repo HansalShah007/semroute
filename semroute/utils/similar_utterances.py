@@ -1,13 +1,10 @@
-import re
 import json
 import os
-import logging
-import sys
 from openai import OpenAI
 from typing import List
 
-logging.basicConfig(level=logging.ERROR,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+class OpenAIChatAPIError(Exception):
+    pass
 
 def openai_chat_api(
     messages, model='gpt-3.5-turbo', max_tokens=4095, temperature=1, seed=42
@@ -87,12 +84,14 @@ Description:
     
     llm_resp = openai_chat_api(messages)
     try:
-        similar_utterances = json.loads(llm_resp)["similar_utterances"]
-    except IndexError as e:
-        if retries:
+        response_json = json.loads(llm_resp)
+        if "similar_utterances" not in response_json:
+            raise ValueError("The response does not contain 'similar_utterances'")
+        similar_utterances = response_json["similar_utterances"]
+    except (json.JSONDecodeError, ValueError) as e:
+        if retries > 0:
             return get_similar_utterances(utterances, description, retries-1)
         else:
-            logging.error("Failed to generate similar utterances")
-            sys.exit(1)
+            raise OpenAIChatAPIError("Failed to generate similar utterances after multiple retries") from e
 
     return similar_utterances

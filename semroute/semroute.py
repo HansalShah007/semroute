@@ -1,28 +1,28 @@
 import pickle
 import numpy as np
-import sys
-import logging
-from typing import List, Dict, Optional, Literal
+from typing import List, Dict, Optional, Literal, Callable
 from pydantic import BaseModel, ValidationError, model_validator
-from semroute.embeders.openai import OpenAIEmbeder
-from semroute.embeders.mistral import MistralAIEmbeder
+from semroute.embedders.openai import OpenAIEmbedder
+from semroute.embedders.mistral import MistralAIEmbedder
+from semroute.embedders.custom import CustomEmbedder
 from semroute.utils.centroid import get_centroid
 from semroute.utils.similar_utterances import get_similar_utterances
 from semroute.utils.similarity import cosine_similarity
-
-logging.basicConfig(level=logging.ERROR,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
 
 embedding_models = {
     "OpenAI": ['text-embedding-3-small', 'text-embedding-3-large', 'text-embedding-ada-002'],
     "MistralAI": ['mistral-embed']
 }
 
-host_embeder_class_mapping = {
-    "OpenAI": OpenAIEmbeder,
-    "MistralAI": MistralAIEmbeder
+host_embedder_class_mapping = {
+    "OpenAI": OpenAIEmbedder,
+    "MistralAI": MistralAIEmbedder
 }
 
+class CustomEmbedderSchema(BaseModel):
+    embedding_function: Callable[[List[str]], np.ndarray]
+    static_threshold: float
+    vector_embedding_size: int
 
 class RouteSchema(BaseModel):
     name: str
@@ -36,8 +36,8 @@ class RouteSchema(BaseModel):
 
 
 class RouterSchema(BaseModel):
-    embeder_host: Literal['OpenAI', 'MistralAI']
-    embeder_model_name: str
+    embedder_host: Literal['OpenAI', 'MistralAI']
+    embedder_model_name: str
     thresholding_type: Literal['static', 'dynamic']
     scoring_method: Literal['individual_averaging', 'centroid']
     dynamic_threshold: Optional[float] = None
@@ -45,10 +45,10 @@ class RouterSchema(BaseModel):
 
     @model_validator(mode='after')
     def check_embedding_model(self):
-        embeder_host = self.embeder_host
-        embeder_model_name = self.embeder_model_name
-        if embeder_model_name not in embedding_models[embeder_host]:
-            raise ValueError(f"Embeder model is not supported by the embeder host, choose from {embedding_models[embeder_host]}")
+        embedder_host = self.embedder_host
+        embedder_model_name = self.embedder_model_name
+        if embedder_model_name not in embedding_models[embedder_host]:
+            raise ValueError(f"embedder model is not supported by the embedder host, choose from {embedding_models[embedder_host]}")
         return self
 
     @model_validator(mode='after')
@@ -78,34 +78,51 @@ class Router:
 
     def __init__(
         self,
-        embeder_host: str = "OpenAI",
-        embeder_model: str = "text-embedding-3-small",
+        embedder_host: str = "OpenAI",
+        embedder_model: str = "text-embedding-3-small",
         thresholding_type: str = "static",
-        scoring_method: str = "individual_averaging"
+        scoring_method: str = "individual_averaging",
+        custom_embedder: Dict = None
     ):
         """
         Initializes the Router with the specified embedding host, model, thresholding type, and scoring method.
 
         Parameters:
-        - embeder_host (str): The host providing the embedding model (e.g., "OpenAI" or "MistralAI").
-        - embeder_model (str): The specific embedding model to use (e.g., "text-embedding-3-small").
+        - embedder_host (str): The host providing the embedding model (e.g., "OpenAI" or "MistralAI").
+        - embedder_model (str): The specific embedding model to use (e.g., "text-embedding-3-small").
         - thresholding_type (str): The type of thresholding to use ("static" or "dynamic").
         - scoring_method (str): The method used for scoring the similarity ("individual_averaging" or "centroid").
 
         Raises:
-        - ValueError: If the `embeder_host`, `embeder_model`, `thresholding_type`, or `scoring_method` is invalid.
+        - ValueError: If the `embedder_host`, `embedder_model`, `thresholding_type`, or `scoring_method` is invalid.
         """
 
-        if embeder_host not in ['OpenAI', 'MistralAI']:
-            raise ValueError(
-                "Incorrect value for embeder host, choose from ['OpenAI', 'MistralAI']")
-        self.embeder_host = embeder_host
+        if custom_embedder is None:
+            if embedder_host not in ['OpenAI', 'MistralAI']:
+                raise ValueError(
+                    "Incorrect value for embedder host, choose from ['OpenAI', 'MistralAI']")
+            self.embedder_host = embedder_host
 
-        if embeder_model not in embedding_models[embeder_host]:
-            raise ValueError(f"Incorrect value for embeder model, choose from {embedding_models[embeder_host]}")
-        self.embeder_model_name = embeder_model
-        self.embeder_model = host_embeder_class_mapping[self.embeder_host](
-            embeder_model)
+            if embedder_model not in embedding_models[embedder_host]:
+                raise ValueError(f"Incorrect value for embedder model, choose from {embedding_models[embedder_host]}")
+            self.embedder_model_name = embedder_model
+            self.embedder_model = host_embedder_class_mapping[self.embedder_host](embedder_model)
+        else:
+            try:
+                CustomEmbedderSchema(**custom_embedder)
+                self.embedder_model = CustomEmbedder(
+                    custom_embedding_function=custom_embedder['embedding_function'],
+                    static_threshold=custom_embedder['static_threshold'],
+                    vector_embedding_size=custom_embedder['vector_embedding_size']
+                )
+            except Exception as e:
+                raise ValueError(f"""
+Invalid custom embedder configuration. 
+Expected schema: {{
+    embedding_function: Callable[[List[str]], np.ndarray]
+    static_threshold: float
+    vector_embedding_size: int
+}}""")
 
         if thresholding_type not in ["static", "dynamic"]:
             raise ValueError(
@@ -141,7 +158,7 @@ class Router:
             route = {
                 "name": name,
                 "utterances": utterances,
-                "utterance_embeddings": self.embeder_model.embed_utterances(utterances),
+                "utterance_embeddings": self.embedder_model.embed_utterances(utterances),
                 "description": description
             }
 
@@ -151,9 +168,9 @@ class Router:
             if self.thresholding_type == 'dynamic':
                 similar_utterances = get_similar_utterances(
                     utterances, description)
-                similar_embeddings = self.embeder_model.embed_utterances(
+                similar_embeddings = self.embedder_model.embed_utterances(
                     similar_utterances)
-                self.embeder_model.adapt_threshold(
+                self.embedder_model.adapt_threshold(
                     similar_embeddings, route['utterance_embeddings'])
 
             self.routes.append(route)
@@ -178,12 +195,12 @@ class Router:
         """
 
         if len(self.routes):
-            query_embedding = self.embeder_model.embed_utterances([query])[0]
+            query_embedding = self.embedder_model.embed_utterances([query])[0]
 
             if self.thresholding_type == 'static':
-                threshold = self.embeder_model.get_static_threshold_score()
+                threshold = self.embedder_model.get_static_threshold_score()
             elif self.thresholding_type == 'dynamic':
-                threshold = self.embeder_model.dynamic_threshold
+                threshold = self.embedder_model.dynamic_threshold
             route_scores = {}
             if self.scoring_method == 'individual_averaging':
 
@@ -211,8 +228,7 @@ class Router:
                 return None
 
         else:
-            logging.error("Routes are missing! Add routes to the router for routing a query")
-            sys.exit(1)
+            raise RuntimeError("Routes are missing! Add routes to the router for routing a query")
             
     def save_router(
         self,
@@ -222,20 +238,23 @@ class Router:
         This function saves the routes specific to the Router instance in a pickle file.
         """
 
+        if isinstance(self.embedder_model, CustomEmbedder):
+            raise NotImplementedError("Saving the routing cofigurations is not supported for a custom embedding function")
+
         if filepath[-3:] != 'pkl':
             raise ValueError(
                 "The filepath should lead to a path where router configuration needs to be stored and the filename should be ending with a 'pkl' extension")
 
         router = {
-            "embeder_host": self.embeder_host,
-            "embeder_model_name": self.embeder_model_name,
+            "embedder_host": self.embedder_host,
+            "embedder_model_name": self.embedder_model_name,
             "thresholding_type": self.thresholding_type,
             "scoring_method": self.scoring_method,
             "routes": self.routes
         }
 
         if self.thresholding_type == 'dynamic':
-            router['dynamic_threshold'] = self.embeder_model.dynamic_threshold
+            router['dynamic_threshold'] = self.embedder_model.dynamic_threshold
 
         with open(f'{filepath}', 'wb') as f:
             pickle.dump(router, f)
@@ -259,18 +278,35 @@ class Router:
             RouterSchema(**preconfig_routes)
 
             # Configuring the router
-            self.embeder_host = preconfig_routes['embeder_host']
-            self.embeder_model_name = preconfig_routes['embeder_model_name']
-            self.embeder_model = host_embeder_class_mapping[self.embeder_host](
-                self.embeder_model_name)
+            self.embedder_host = preconfig_routes['embedder_host']
+            self.embedder_model_name = preconfig_routes['embedder_model_name']
+            self.embedder_model = host_embedder_class_mapping[self.embedder_host](
+                self.embedder_model_name)
             self.thresholding_type = preconfig_routes['thresholding_type']
             self.scoring_method = preconfig_routes['scoring_method']
 
             if self.thresholding_type == 'dynamic':
-                self.embeder_model.dynamic_threshold = preconfig_routes['dynamic_threshold']
+                self.embedder_model.dynamic_threshold = preconfig_routes['dynamic_threshold']
 
             self.routes = preconfig_routes['routes']
 
         except ValueError or ValidationError as e:
-            logging.error(e)
-            sys.exit(1)
+            raise ValueError(f"""
+Invalid router configuration schema. 
+Expected schemas: {{
+
+RouteSchema
+    name: str
+    utterances: List[str]
+    utterance_embeddings: np.ndarray
+    description: str
+    centroid: Optional[np.ndarray] = None
+                         
+RouterSchema:
+    embedder_host: Literal['OpenAI', 'MistralAI']
+    embedder_model_name: str
+    thresholding_type: Literal['static', 'dynamic']
+    scoring_method: Literal['individual_averaging', 'centroid']
+    dynamic_threshold: Optional[float] = None
+    routes: List[RouteSchema]
+}}""")

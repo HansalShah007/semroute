@@ -1,21 +1,21 @@
 import os
 import numpy as np
-from semroute.embeders.base import BaseEmbeder
+from semroute.embedders.base import BaseEmbedder
 from typing import List
 from openai import OpenAI
 
-class OpenAIEmbeder(BaseEmbeder):
+class OpenAIEmbedder(BaseEmbedder):
     """
     A class to interact with OpenAI's embedding models for embedding utterances.
     
     Inherits from:
-    - BaseEmbeder: The base class for embedding models.
+    - BaseEmbedder: The base class for embedding models.
     """
     
     def __init__(self, model_name: str = "text-embedding-3-small"):
 
         """
-        Initializes the OpenAIEmbeder with the specified model name and sets up the OpenAI client.
+        Initializes the OpenAIEmbedder with the specified model name and sets up the OpenAI client.
         
         Parameters:
         - model_name (str): The name of the OpenAI embedding model to use (default is "text-embedding-3-small").

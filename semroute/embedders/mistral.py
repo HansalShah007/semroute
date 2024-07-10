@@ -1,20 +1,20 @@
 import os
 import numpy as np
-from semroute.embeders.base import BaseEmbeder
+from semroute.embedders.base import BaseEmbedder
 from typing import List
 from mistralai.client import MistralClient
 
-class MistralAIEmbeder(BaseEmbeder):
+class MistralAIEmbedder(BaseEmbedder):
     """
     A class to interact with Mistral AI's embedding models for embedding utterances.
     
     Inherits from:
-    - BaseEmbeder: The base class for embedding models.
+    - BaseEmbedder: The base class for embedding models.
     """
 
     def __init__(self, model_name: str = "mistral-embed"):
         """
-        Initializes the MistralAIEmbeder with the specified model name and sets up the Mistral AI client.
+        Initializes the MistralAIEmbedder with the specified model name and sets up the Mistral AI client.
         
         Parameters:
         - model_name (str): The name of the Mistral AI embedding model to use (default is "mistral-embed").

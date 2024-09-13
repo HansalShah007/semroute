@@ -1,6 +1,6 @@
 import pickle
 import numpy as np
-from typing import List, Dict, Optional, Literal, Callable
+from typing import List, Dict, Optional, Literal, Callable, Union
 from pydantic import BaseModel, ValidationError, model_validator
 from semroute.embedders.openai import OpenAIEmbedder
 from semroute.embedders.mistral import MistralAIEmbedder
@@ -26,7 +26,7 @@ class CustomEmbedderSchema(BaseModel):
 
 class RouteSchema(BaseModel):
     name: str
-    utterances: List[str]
+    utterances: Optional[List[str]] = None
     utterance_embeddings: np.ndarray
     description: str
     centroid: Optional[np.ndarray] = None
@@ -137,7 +137,7 @@ Expected schema: {{
     def add_route(
         self,
         name: str,
-        utterances: List[str],
+        utterances: Union[List[str], np.ndarray],
         description: str
     ):
         """
@@ -155,23 +155,34 @@ Expected schema: {{
 
         if len(utterances):
 
-            route = {
-                "name": name,
-                "utterances": utterances,
-                "utterance_embeddings": self.embedder_model.embed_utterances(utterances),
-                "description": description
-            }
+            if isinstance(utterances, list):
+                route = {
+                    "name": name,
+                    "utterances": utterances,
+                    "utterance_embeddings": self.embedder_model.embed_utterances(utterances),
+                    "description": description
+                }
+            elif isinstance(utterances, np.ndarray):
+                route = {
+                    "name": name,
+                    "utterance_embeddings": utterances,
+                    "description": description
+                }
 
             if self.scoring_method == 'centroid':
                 route['centroid'] = get_centroid(route['utterance_embeddings'])
 
             if self.thresholding_type == 'dynamic':
-                similar_utterances = get_similar_utterances(
-                    utterances, description)
-                similar_embeddings = self.embedder_model.embed_utterances(
-                    similar_utterances)
-                self.embedder_model.adapt_threshold(
-                    similar_embeddings, route['utterance_embeddings'])
+                if isinstance(utterances, list):
+                    similar_utterances = get_similar_utterances(
+                        utterances, description)
+                    similar_embeddings = self.embedder_model.embed_utterances(
+                        similar_utterances)
+                    self.embedder_model.adapt_threshold(
+                        similar_embeddings, route['utterance_embeddings'])
+                elif isinstance(utterances, np.ndarray):
+                    self.embedder_model.adapt_threshold(
+                        route['utterance_embeddings'], route['utterance_embeddings'])
 
             self.routes.append(route)
 

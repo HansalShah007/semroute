@@ -4,3 +4,4 @@ dist/
 semroute.egg-info/
 __pycache__
 venv/
+deployment.md
